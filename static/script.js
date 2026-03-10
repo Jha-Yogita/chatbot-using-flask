@@ -1,105 +1,150 @@
-let savedpasttext = []; // Variable to store the message
-let savedpastresponse = []; // Variable to store the message
+class Chatbot {
+  constructor() {
+    this.messagesContainer = document.getElementById('messages-container');
+    this.messageForm = document.getElementById('message-form');
+    this.messageInput = document.getElementById('message-input');
+    this.history = [];
+    this.init();
+  }
 
-// Section: get the Id of the talking container
-const messagesContainer = document.getElementById('messages-container');
-const messageForm = document.getElementById('message-form');
-const messageInput = document.getElementById('message-input');
-//
+  init() {
+    this.messageForm.addEventListener('submit', (e) => this.handleSubmit(e));
+    this.messageInput.addEventListener('keydown', (e) => this.handleKeyPress(e));
+    this.messageInput.addEventListener('input', () => this.autoResizeTextarea());
+    this.loadHistory();
+  }
 
-//Section: function to creat the dialogue window
-const addMessage = (message, role, imgSrc) => {
-  // creat elements in the dialogue window
-  const messageElement = document.createElement('div');
-  const textElement = document.createElement('p');
-  messageElement.className = `message ${role}`;
-  const imgElement = document.createElement('img');
-  imgElement.src = `${imgSrc}`;
-  // append the image and message to the message element
-  messageElement.appendChild(imgElement);
-  textElement.innerText = message;
-  messageElement.appendChild(textElement);
-  messagesContainer.appendChild(messageElement);
-  // creat the ending of the message
-  var clearDiv = document.createElement("div");
-  clearDiv.style.clear = "both";
-  messagesContainer.appendChild(clearDiv);
-};
-//
+  autoResizeTextarea() {
+    this.messageInput.style.height = 'auto';
+    this.messageInput.style.height = this.messageInput.scrollHeight + 'px';
+  }
 
-
-//Section: Calling the model
-const sendMessage = async (message) => {
-  // addMessage(message, 'user','user.jpeg');
-  addMessage(message, 'user','../static/user.jpeg');
-  // Loading animation
-  const loadingElement = document.createElement('div');
-  const loadingtextElement = document.createElement('p');
-  loadingElement.className = `loading-animation`;
-  loadingtextElement.className = `loading-text`;
-  loadingtextElement.innerText = 'Loading....Please wait';
-  messagesContainer.appendChild(loadingElement);
-  messagesContainer.appendChild(loadingtextElement);
-
-  async function makePostRequest(msg) {
-    const url = 'www.example.com';  // Make a POST request to this url
-    const requestBody = {
-      prompt: msg
-    };
-  
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(requestBody)
-      });
-  
-      const data = await response.text();
-      // Handle the response data here
-      console.log(data);
-      return data;
-    } catch (error) {
-      // Handle any errors that occurred during the request
-      console.error('Error:', error);
-      return error
+  handleKeyPress(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      this.messageForm.dispatchEvent(new Event('submit'));
     }
   }
-  
-  var res = await makePostRequest(message);
-  
-  data = {"response": res};
-  
-  // Deleting the loading animation
-  const loadanimation = document.querySelector('.loading-animation');
-  const loadtxt = document.querySelector('.loading-text');
-  loadanimation.remove();
-  loadtxt.remove();
 
-  if (data.error) {
-    // Handle the error here
-    const errorMessage = JSON.stringify(data);
-    // addMessage(errorMessage, 'error','Error.png');
-    addMessage(errorMessage, 'error','../static/Error.png');
-  } else {
-    // Process the normal response here
-    const responseMessage = data['response'];
-    // addMessage(responseMessage, 'aibot','Bot_logo.png');
-    addMessage(responseMessage, 'aibot','../static/Bot_logo.png');
+  async handleSubmit(e) {
+    e.preventDefault();
+    const message = this.messageInput.value.trim();
+    
+    if (!message) return;
+    
+    this.messageInput.value = '';
+    this.messageInput.style.height = 'auto';
+    await this.sendMessage(message);
   }
-  
-  //!!!!! code to  save the content in history
-  //
-};
-//
 
-//Section: Button to submit to the model and get the response
-messageForm.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const message = messageInput.value.trim();
-  if (message !== '') {
-    messageInput.value = '';
-    await sendMessage(message);
+  addMessage(message, role, imgSrc) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${role}`;
+    
+    const img = document.createElement('img');
+    img.src = imgSrc;
+    img.alt = `${role} avatar`;
+    
+    const text = document.createElement('p');
+    text.textContent = message;
+    
+    messageDiv.appendChild(img);
+    messageDiv.appendChild(text);
+    this.messagesContainer.appendChild(messageDiv);
+    this.scrollToBottom();
+    
+    if (role === 'user') {
+      this.history.push({ role, content: message });
+      this.saveHistory();
+    }
   }
+
+  showLoading() {
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'loading-container';
+    loadingDiv.id = 'loading-container';
+    
+    const spinner = document.createElement('div');
+    spinner.className = 'loading-animation';
+    
+    const text = document.createElement('div');
+    text.className = 'loading-text';
+    text.textContent = 'AI is thinking...';
+    
+    loadingDiv.appendChild(spinner);
+    loadingDiv.appendChild(text);
+    this.messagesContainer.appendChild(loadingDiv);
+    this.scrollToBottom();
+  }
+
+  hideLoading() {
+    const loadingContainer = document.getElementById('loading-container');
+    if (loadingContainer) {
+      loadingContainer.remove();
+    }
+  }
+
+  scrollToBottom() {
+    this.messagesContainer.scrollTo({
+      top: this.messagesContainer.scrollHeight,
+      behavior: 'smooth'
+    });
+  }
+
+  async sendMessage(message) {
+    this.addMessage(message, 'user', '../static/user.jpeg');
+    this.showLoading();
+
+    try {
+      const response = await this.makePostRequest(message);
+      this.hideLoading();
+      
+      if (response.error) {
+        this.addMessage(response.error, 'error', '../static/Error.png');
+      } else {
+        this.addMessage(response.response, 'aibot', '../static/Bot_logo.png');
+        this.history.push({ role: 'assistant', content: response.response });
+        this.saveHistory();
+      }
+    } catch (error) {
+      this.hideLoading();
+      this.addMessage('Network error. Please try again.', 'error', '../static/Error.png');
+      console.error('Error:', error);
+    }
+  }
+
+  async makePostRequest(message) {
+    const response = await fetch('/chatbot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: message })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    return await response.json();
+  }
+
+  saveHistory() {
+    sessionStorage.setItem('chatHistory', JSON.stringify(this.history));
+  }
+
+  loadHistory() {
+    const saved = sessionStorage.getItem('chatHistory');
+    if (saved) {
+      this.history = JSON.parse(saved);
+    }
+  }
+
+  clearHistory() {
+    this.history = [];
+    sessionStorage.removeItem('chatHistory');
+    this.messagesContainer.innerHTML = '';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  new Chatbot();
 });
